@@ -25,9 +25,15 @@
             android:layout_height="wrap_content"
             android:text="--"
             android:textSize="24sp"
-            android:textStyle="bold"/>
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp"/>
 
-
+        <TextView
+            android:id="@+id/statusTextView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Not connected"
+            android:textSize="12sp"/>
     </LinearLayout>
 
 </androidx.wear.widget.BoxInsetLayout>
