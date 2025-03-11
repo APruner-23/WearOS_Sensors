@@ -38,8 +38,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var healthServicesClient: HealthServicesClient
     private var measuring = false
 
-    // Set your server IP address here
+    // Backend Server IP Address
     private val SERVER_URL = "http://192.168.0.162:5000/api/heartrate"
+    // String representing the device ID
     private lateinit var deviceId: String
 
     // Timestamp formatter
@@ -51,18 +52,20 @@ class MainActivity : ComponentActivity() {
             dataType: DeltaDataType<*, *>,
             availability: Availability
         ) {
-            // Not handling availability changes
+            // Not handling availability changes for now
         }
 
+        // When data is received from the sensors
         override fun onDataReceived(data: DataPointContainer) {
             // Process heart rate data points
             val heartRateSamples = data.getData(DataType.HEART_RATE_BPM)
             heartRateSamples.firstOrNull()?.let { sample ->
                 if (sample is SampleDataPoint<Double>) {
                     val heartRate = sample.value.toInt()
+                    // Set the heart rate value in the TextView
                     heartRateTextView.text = "$heartRate BPM"
 
-                    // Send heart rate to server
+                    // Send heart rate to backend server
                     sendHeartRateToServer(heartRate)
                 }
             }
