@@ -4,10 +4,12 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Settings
+import android.view.WindowManager
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.health.services.client.HealthServices
 import androidx.health.services.client.HealthServicesClient
 import androidx.health.services.client.MeasureCallback
@@ -20,6 +22,8 @@ import androidx.health.services.client.data.SampleDataPoint
 import androidx.health.services.client.getCapabilities
 import androidx.health.services.client.unregisterMeasureCallback
 import androidx.lifecycle.lifecycleScope
+import androidx.wear.ambient.AmbientLifecycleObserver
+import androidx.wear.ambient.AmbientModeSupport
 import com.example.testsensors2.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -32,11 +36,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvider {
     private lateinit var heartRateTextView: TextView
     private lateinit var statusTextView: TextView
     private lateinit var healthServicesClient: HealthServicesClient
     private var measuring = false
+
+    private lateinit var ambientController: AmbientModeSupport.AmbientController
 
     // Backend Server IP Address
     private val SERVER_URL = "http://192.168.0.162:5000/api/heartrate"
@@ -86,6 +92,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        // Setup ambient mode
+        ambientController = AmbientModeSupport.attach(this)
+
+        // Keep the screen on regardless of ambient mode
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         // Initialize views
         heartRateTextView = findViewById(R.id.heartRateTextView)
@@ -191,7 +203,7 @@ class MainActivity : ComponentActivity() {
                 try {
                     healthServicesClient.measureClient.unregisterMeasureCallback(
                         DataType.HEART_RATE_BPM,
-                        callback = TODO()
+                        callback = measureCallback
                     )
                     measuring = false
                     statusTextView.text = "Monitoring stopped"
@@ -209,4 +221,30 @@ class MainActivity : ComponentActivity() {
             checkPermissionAndStartMonitoring()
         }
     }
+
+    private inner class MyAmbientCallback : AmbientModeSupport.AmbientCallback() {
+        override fun onEnterAmbient(ambientDetails: Bundle?) {
+            super.onEnterAmbient(ambientDetails)
+            // Keep tracking even in ambient mode
+            if (!measuring) {
+                startHeartRateMonitoring()
+            }
+        }
+
+        override fun onExitAmbient() {
+            super.onExitAmbient()
+            // Already in interactive mode, nothing special needed
+        }
+
+        override fun onUpdateAmbient() {
+            super.onUpdateAmbient()
+            // Update UI if needed in ambient mode
+        }
+    }
+
+    override fun getAmbientCallback(): AmbientModeSupport.AmbientCallback {
+        return MyAmbientCallback()
+    }
+
+
 }

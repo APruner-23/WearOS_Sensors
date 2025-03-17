@@ -41,7 +41,6 @@ android {
 dependencies {
     implementation(libs.wear)
     implementation(libs.core.ktx)
-//    implementation(libs.health.services.client)
     implementation(libs.androidx.health.services.client)
     implementation(libs.play.services.wearable)
     implementation(platform(libs.compose.bom))
