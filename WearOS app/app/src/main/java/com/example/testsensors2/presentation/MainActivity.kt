@@ -1,9 +1,15 @@
 package com.example.testsensors2.presentation
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import android.view.WindowManager
 import android.widget.TextView
 import androidx.activity.ComponentActivity
@@ -41,6 +47,12 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
     private lateinit var statusTextView: TextView
     private lateinit var healthServicesClient: HealthServicesClient
     private var measuring = false
+
+    private lateinit var sensorManager: SensorManager
+    private var skinTempSensor: Sensor? = null
+    private var gsrSensor: Sensor? = null
+    private lateinit var skinTempTextView: TextView
+    private lateinit var gsrTextView: TextView
 
     private lateinit var ambientController: AmbientModeSupport.AmbientController
 
@@ -89,6 +101,90 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
         }
     }
 
+    // Sensor event listener
+    private val sensorEventListener = object : SensorEventListener {
+        override fun onSensorChanged(event: SensorEvent) {
+            when (event.sensor) {
+                skinTempSensor -> {
+                    val skinTemp = event.values[0]
+                    Log.d("SkinTempSensor", "Skin temperature: $skinTemp")
+                    runOnUiThread {
+                        skinTempTextView.text = String.format("%.1f°C", skinTemp)
+                    }
+
+                    //sendHealthDataToServer("skin_temperature", skinTemp.toInt())
+                }
+                gsrSensor -> {
+                    val gsr = event.values[0]
+                    Log.d("GSRSensor", "GSR: $gsr")
+                    runOnUiThread {
+                        gsrTextView.text = String.format("%.0f kΩ", gsr)
+                    }
+
+                    //sendHealthDataToServer("gsr", gsr.toInt())
+                }
+            }
+        }
+
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+            // Not handling accuracy changes
+        }
+    }
+
+    private fun initializeSensors() {
+        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+
+        // Get skin temperature sensor
+        skinTempSensor = sensorManager.getDefaultSensor(Sensor.TYPE_TEMPERATURE)
+        if (skinTempSensor == null) {
+            // Try custom sensor types if standard ones aren't available
+            val deviceSensors = sensorManager.getSensorList(Sensor.TYPE_ALL)
+            for (sensor in deviceSensors) {
+                if (sensor.name.contains("Skin", ignoreCase = true) &&
+                    sensor.name.contains("temp", ignoreCase = true)) {
+                    skinTempSensor = sensor
+                    Log.d("SkinTempSensor", "Found skin temperature sensor: ${sensor.name}")
+                    break
+                }
+            }
+        }
+
+        // Get GSR sensor
+        val deviceSensors = sensorManager.getSensorList(Sensor.TYPE_ALL)
+        for (sensor in deviceSensors) {
+            if (sensor.name.contains("Galvanic", ignoreCase = true)) {
+                gsrSensor = sensor
+                Log.d("GSRSensor", "Found GSR sensor: ${sensor.name}")
+                break
+            }
+        }
+
+        // Register listeners for the sensors
+        if (skinTempSensor != null) {
+            sensorManager.registerListener(
+                sensorEventListener,
+                skinTempSensor,
+                SensorManager.SENSOR_DELAY_NORMAL
+            )
+            skinTempTextView.text = "Waiting..."
+        } else {
+            skinTempTextView.text = "No sensor"
+            Log.d("SkinTempSensor", "Skin temperature sensor not found")
+        }
+
+        if (gsrSensor != null) {
+            sensorManager.registerListener(
+                sensorEventListener,
+                gsrSensor,
+                SensorManager.SENSOR_DELAY_NORMAL
+            )
+            gsrTextView.text = "Waiting..."
+        } else {
+            gsrTextView.text = "No sensor"
+            Log.d("GSRSensor", "GSR sensor not found")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -102,6 +198,8 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
         // Initialize views
         heartRateTextView = findViewById(R.id.heartRateTextView)
         statusTextView = findViewById(R.id.statusTextView)
+        skinTempTextView = findViewById(R.id.skinTempTextView)
+        gsrTextView = findViewById(R.id.gsrTextView)
 
 
         // Get unique device ID for data identification
@@ -110,7 +208,10 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
         // Initialize Health Services
         healthServicesClient = HealthServices.getClient(this)
 
-        // Check and request permissions if needed
+        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+
+        initializeSensors()
+
         checkPermissionAndStartMonitoring()
     }
 
@@ -144,7 +245,6 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
 
                 // Register callback and start measuring
                 measureClient.registerMeasureCallback(DataType.HEART_RATE_BPM, measureCallback)
-                heartRateTextView.text = "Measuring..."
                 statusTextView.text = "Connected to server"
                 measuring = true
             } catch (e: Exception) {
@@ -197,6 +297,8 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
 
     override fun onPause() {
         super.onPause()
+        sensorManager.unregisterListener(sensorEventListener)
+
         // Stop measuring when app is in background
         if (measuring) {
             lifecycleScope.launch {
@@ -212,6 +314,8 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
                 }
             }
         }
+        // Unregister sensor listeners
+        sensorManager.unregisterListener(sensorEventListener)
     }
 
     override fun onResume() {
@@ -219,6 +323,21 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
         // Resume measuring when app comes to foreground
         if (!measuring) {
             checkPermissionAndStartMonitoring()
+        }
+
+        if (skinTempSensor != null) {
+            sensorManager.registerListener(
+                sensorEventListener,
+                skinTempSensor,
+                SensorManager.SENSOR_DELAY_NORMAL
+            )
+        }
+        if (gsrSensor != null) {
+            sensorManager.registerListener(
+                sensorEventListener,
+                gsrSensor,
+                SensorManager.SENSOR_DELAY_NORMAL
+            )
         }
     }
 
@@ -233,12 +352,11 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
 
         override fun onExitAmbient() {
             super.onExitAmbient()
-            // Already in interactive mode, nothing special needed
+            // Already in interactive mode
         }
 
         override fun onUpdateAmbient() {
             super.onUpdateAmbient()
-            // Update UI if needed in ambient mode
         }
     }
 

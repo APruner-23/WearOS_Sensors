@@ -1,0 +1,34 @@
+List of available sensors in the Google Pixel Watch 2:
+
+Accelerometer --> Linear Acceleration along 3 axes (m/s^2)
+Magnetometer Sensor --> Ambient Magnetic field 3 axes (microteslas)
+Orientation Sensor --> Pitch, roll, yaw, deprecated
+Gyroscope --> Angular velocity on 3 axes
+TCS3701 Light Sensor --> Ambient light intensity
+Pressure Sensor --> Atmospheric pressure (altitude estimation)
+Gravity Sensor --> Force of gravity
+Linear Acceleration Sensor
+Rotation Vector Sensor
+Magnetometer Sensor-Uncalibrated
+Game Rotation Vector Sensor
+Gyroscope-Uncalibrated
+Step Detector --> Generates an evenet each time a step is detected
+Step Counter --> Cumulative count of steps taken since last reboot
+Geomagnetic Rotation Vector Sensor
+HeartRate
+TiltToWake --> Detects tilting gestures (wake the screen)
+Stationary Sensor --> Determines if the device is idle or in motion
+Instant Motion Sensor
+Low latency off body detect --> Detects when the use removed his watch
+Accelerometer-Uncalibrated
+Imu Temperature --> Temperature of the sensor
+Pressure Temperature Sensor 
+Magnetometer Temperature Sensor
+PPG Controller
+ECG Sensor
+ECG Lead Detector
+Gaze Sensor --> Eye tracking
+Galvanic Skin Response --> Electrical conductance of the skin (microsiemens), assess emotional arousal or stress levels
+Skin temperature sensor --> Temperature of the skin
+PPG Sensor
+Step Cadence --> Steps rate
