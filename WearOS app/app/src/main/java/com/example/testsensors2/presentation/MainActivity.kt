@@ -81,7 +81,7 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
                 if (sample is SampleDataPoint<Double>) {
                     val heartRate = sample.value.toInt()
                     // Set the heart rate value in the TextView
-                    heartRateTextView.text = "$heartRate BPM"
+                    heartRateTextView.text = "$heartRate"
 
                     // Send heart rate to backend server
                     sendHeartRateToServer(heartRate)

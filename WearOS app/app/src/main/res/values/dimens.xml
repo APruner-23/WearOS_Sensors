@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Padding around the entire inset layout -->
     <dimen name="box_inset_layout_padding">16dp</dimen>
-    <!-- Padding inside the inner frame -->
     <dimen name="inner_frame_layout_padding">8dp</dimen>
 </resources>
