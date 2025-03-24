@@ -13,7 +13,7 @@ Install the dependencies in your virtual environment (recommended) or in your sy
 
 ## 3. Run the server
 Run the server by typing the following command:
-`python3 backend.py`
+`python3 app.py`
 
 Once done the server will be running on port 5000, and the smartwatch should be able to send data to it, if it is not able to send data it's probably because of firewall issues.
 
