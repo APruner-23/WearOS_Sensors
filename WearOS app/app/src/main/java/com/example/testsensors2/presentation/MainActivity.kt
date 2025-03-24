@@ -57,7 +57,7 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
     private lateinit var ambientController: AmbientModeSupport.AmbientController
 
     // Backend Server IP Address
-    private val SERVER_URL = "http://192.168.0.162:5000/api/heartrate"
+    private val SERVER_URL = "http://192.168.0.162:5000/api"
     // String representing the device ID
     private lateinit var deviceId: String
 
@@ -112,7 +112,7 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
                         skinTempTextView.text = String.format("%.1f°C", skinTemp)
                     }
 
-                    //sendHealthDataToServer("skin_temperature", skinTemp.toInt())
+                    sendHealthDataToServer("skin_temperature", skinTemp.toInt())
                 }
                 gsrSensor -> {
                     val gsr = event.values[0]
@@ -121,7 +121,7 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
                         gsrTextView.text = String.format("%.0f kΩ", gsr)
                     }
 
-                    //sendHealthDataToServer("gsr", gsr.toInt())
+                    sendHealthDataToServer("gsr", gsr.toInt())
                 }
             }
         }
@@ -265,7 +265,49 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
                 }
 
                 // Setup HTTP connection
-                val url = URL(SERVER_URL)
+                val url = URL("$SERVER_URL/heartrate")
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.doOutput = true
+
+                // Send data
+                val outputStream = connection.outputStream
+                val writer = OutputStreamWriter(outputStream)
+                writer.write(jsonPayload.toString())
+                writer.flush()
+                writer.close()
+
+                // Check response
+                val responseCode = connection.responseCode
+                val success = responseCode in 200..299
+
+                withContext(Dispatchers.Main) {
+                    statusTextView.text = if (success) "Data sent successfully" else "Send failed: $responseCode"
+                }
+
+                connection.disconnect()
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    statusTextView.text = "Error: ${e.message}"
+                }
+            }
+        }
+    }
+
+    private fun sendHealthDataToServer(dataType: String, value: Int) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                // Create JSON payload
+                val jsonPayload = JSONObject().apply {
+                    put("device_id", deviceId)
+                    put("data_type", dataType)
+                    put("value", value)
+                    put("timestamp", timestampFormat.format(Date()))
+                }
+
+                // Setup HTTP connection
+                val url = URL("$SERVER_URL/$dataType")
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "POST"
                 connection.setRequestProperty("Content-Type", "application/json")

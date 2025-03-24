@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Health Data</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f8fa;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        h1, h2 {
+            color: #2c3e50;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            text-decoration: none;
+            color: #3498db;
+            font-weight: bold;
+        }
+        .chart-container {
+            margin-bottom: 30px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 15px;
+            background-color: #fff;
+        }
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        .data-table th, .data-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        .data-table th {
+            background-color: #f9f9f9;
+            font-weight: bold;
+        }
+        .data-table tr:hover {
+            background-color: #f5f5f5;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        .stats-card {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .stat-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #3498db;
+            margin: 10px 0;
+        }
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Health Data for Device: <span id="device-id">{{ device_id }}</span></h1>
+            <p id="current-time"></p>
+        </div>
+        
+        <a href="/" class="back-link">← Back to Devices</a>
+        
+        <div class="stats-grid" id="stats-cards">
+            <div class="stat-item">
+                <div class="stat-label">Latest Heart Rate</div>
+                <div class="stat-value" id="latest-hr">--</div>
+                <div>BPM</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Latest Skin Temp.</div>
+                <div class="stat-value" id="latest-temp">--</div>
+                <div>°C</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Latest GSR</div>
+                <div class="stat-value" id="latest-gsr">--</div>
+                <div>kΩ</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Data Points</div>
+                <div class="stat-value" id="total-datapoints">--</div>
+                <div>Records</div>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <h2>Heart Rate</h2>
+            <canvas id="heartRateChart"></canvas>
+        </div>
+        
+        <div class="data-grid">
+            <div class="chart-container">
+                <h2>Skin Temperature</h2>
+                <canvas id="tempChart"></canvas>
+            </div>
+            
+            <div class="chart-container">
+                <h2>Galvanic Skin Response</h2>
+                <canvas id="gsrChart"></canvas>
+            </div>
+        </div>
+        
+        <h2>Recent Data</h2>
+        <div class="data-grid">
+            <div>
+                <h3>Heart Rate</h3>
+                <table class="data-table" id="hr-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Heart Rate (BPM)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="2" class="loading">Loading data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div>
+                <h3>Skin Temperature</h3>
+                <table class="data-table" id="temp-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Temperature (°C)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="2" class="loading">Loading data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div>
+                <h3>Galvanic Skin Response</h3>
+                <table class="data-table" id="gsr-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>GSR (kΩ)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="2" class="loading">Loading data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const deviceId = document.getElementById('device-id').textContent;
+        
+        // Update current time
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleString();
+        }
+        
+        // Format timestamp for display
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleString();
+        }
+        
+        // Format timestamp for charts (shorter)
+        function formatChartTime(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString();
+        }
+        
+        // Get data from API
+        async function fetchData() {
+            try {
+                // Fetch heart rate data
+                const hrResponse = await fetch(`/api/heartrate?device_id=${deviceId}&limit=100`);
+                const hrData = await hrResponse.json();
+                
+                // Fetch skin temperature data
+                const tempResponse = await fetch(`/api/skin_temperature?device_id=${deviceId}&limit=100`);
+                const tempData = await tempResponse.json();
+                
+                // Fetch GSR data
+                const gsrResponse = await fetch(`/api/gsr?device_id=${deviceId}&limit=100`);
+                const gsrData = await gsrResponse.json();
+                
+                // Update stats
+                updateStats(hrData, tempData, gsrData);
+                
+                // Update tables
+                updateTable('hr-table', hrData, 'heart_rate', 'BPM');
+                updateTable('temp-table', tempData, 'value', '°C');
+                updateTable('gsr-table', gsrData, 'value', 'kΩ');
+                
+                // Update charts
+                updateCharts(hrData, tempData, gsrData);
+                
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
+        
+        // Update data tables
+        function updateTable(tableId, data, valueField, unit) {
+            const table = document.getElementById(tableId);
+            const tbody = table.querySelector('tbody');
+            
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="2">No data available</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = '';
+            
+            // Sort by timestamp (newest first)
+            data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            
+            // Add rows for each data point
+            data.slice(0, 10).forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${formatTimestamp(item.timestamp)}</td>
+                    <td>${item[valueField]} ${unit}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        
+        // Update stats cards
+        function updateStats(hrData, tempData, gsrData) {
+            // Calculate total data points
+            const totalDatapoints = hrData.length + tempData.length + gsrData.length;
+            document.getElementById('total-datapoints').textContent = totalDatapoints;
+            
+            // Get latest heart rate
+            if (hrData.length > 0) {
+                const latestHr = hrData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+                document.getElementById('latest-hr').textContent = latestHr.heart_rate;
+            }
+            
+            // Get latest temperature
+            if (tempData.length > 0) {
+                const latestTemp = tempData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+                document.getElementById('latest-temp').textContent = latestTemp.value;
+            }
+            
+            // Get latest GSR
+            if (gsrData.length > 0) {
+                const latestGsr = gsrData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+                document.getElementById('latest-gsr').textContent = latestGsr.value;
+            }
+        }
+        
+        // Create and update charts
+        function updateCharts(hrData, tempData, gsrData) {
+            // Prepare data for charts
+            const prepareChartData = (data, valueField) => {
+                // Sort by timestamp (oldest first for charts)
+                const sortedData = [...data].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                
+                return {
+                    labels: sortedData.map(item => formatChartTime(item.timestamp)),
+                    values: sortedData.map(item => item[valueField])
+                };
+            };
+            
+            // Heart Rate Chart
+            const hrChartData = prepareChartData(hrData, 'heart_rate');
+            createChart('heartRateChart', 'Heart Rate Over Time', hrChartData, 'rgb(255, 99, 132)');
+            
+            // Temperature Chart
+            const tempChartData = prepareChartData(tempData, 'value');
+            createChart('tempChart', 'Skin Temperature Over Time', tempChartData, 'rgb(54, 162, 235)');
+            
+            // GSR Chart
+            const gsrChartData = prepareChartData(gsrData, 'value');
+            createChart('gsrChart', 'GSR Over Time', gsrChartData, 'rgb(75, 192, 192)');
+        }
+        
+        // Create a chart
+        function createChart(canvasId, label, data, color) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            
+            // Destroy existing chart if it exists
+            if (window[canvasId]) {
+                window[canvasId].destroy();
+            }
+            
+            window[canvasId] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: label,
+                        data: data.values,
+                        backgroundColor: color,
+                        borderColor: color,
+                        tension: 0.1,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        y: {
+                            beginAtZero: false
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Initial calls
+        updateTime();
+        setInterval(updateTime, 1000);
+        fetchData();
+        
+        // Refresh data every 30 seconds
+        setInterval(fetchData, 30000);
+    </script>
+</body>
+</html>
