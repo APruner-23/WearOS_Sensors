@@ -132,6 +132,10 @@
                 <div>kΩ</div>
             </div>
             <div class="stat-item">
+                <div class="stat-label">Latest Light</div>
+                <div class="stat-value" id="latest-light">--</div>
+            </div>
+            <div class="stat-item">
                 <div class="stat-label">Data Points</div>
                 <div class="stat-value" id="total-datapoints">--</div>
                 <div>Records</div>
@@ -152,6 +156,11 @@
             <div class="chart-container">
                 <h2>Galvanic Skin Response</h2>
                 <canvas id="gsrChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h2>Light</h2>
+                <canvas id="lightChart"></canvas>
             </div>
         </div>
         
@@ -207,6 +216,22 @@
                     </tbody>
                 </table>
             </div>
+            <div>
+                <h3>Light</h3>
+                <table class="data-table" id="light-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Light</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="2" class="loading">Loading data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -245,17 +270,22 @@
                 // Fetch GSR data
                 const gsrResponse = await fetch(`/api/gsr?device_id=${deviceId}&limit=100`);
                 const gsrData = await gsrResponse.json();
+
+                // Fetch GSR data
+                const lightResponse = await fetch(`/api/light?device_id=${deviceId}&limit=100`);
+                const lightData = await lightResponse.json();
                 
                 // Update stats
-                updateStats(hrData, tempData, gsrData);
+                updateStats(hrData, tempData, gsrData, lightData);
                 
                 // Update tables
                 updateTable('hr-table', hrData, 'heart_rate', 'BPM');
                 updateTable('temp-table', tempData, 'value', '°C');
                 updateTable('gsr-table', gsrData, 'value', 'kΩ');
+                updateTable('light-table', lightData, 'value', '');
                 
                 // Update charts
-                updateCharts(hrData, tempData, gsrData);
+                updateCharts(hrData, tempData, gsrData, lightData);
                 
             } catch (error) {
                 console.error('Error fetching data:', error);
@@ -289,9 +319,9 @@
         }
         
         // Update stats cards
-        function updateStats(hrData, tempData, gsrData) {
+        function updateStats(hrData, tempData, gsrData, lightData) {
             // Calculate total data points
-            const totalDatapoints = hrData.length + tempData.length + gsrData.length;
+            const totalDatapoints = hrData.length + tempData.length + gsrData.length + lightData.length;
             document.getElementById('total-datapoints').textContent = totalDatapoints;
             
             // Get latest heart rate
@@ -311,10 +341,16 @@
                 const latestGsr = gsrData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
                 document.getElementById('latest-gsr').textContent = latestGsr.value;
             }
+
+            // Get latest GSR
+            if (lightData.length > 0) {
+                const latestLight = lightData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+                document.getElementById('latest-light').textContent = latestLight.value;
+            }
         }
         
         // Create and update charts
-        function updateCharts(hrData, tempData, gsrData) {
+        function updateCharts(hrData, tempData, gsrData, lightData) {
             // Prepare data for charts
             const prepareChartData = (data, valueField) => {
                 // Sort by timestamp (oldest first for charts)
@@ -337,6 +373,10 @@
             // GSR Chart
             const gsrChartData = prepareChartData(gsrData, 'value');
             createChart('gsrChart', 'GSR Over Time', gsrChartData, 'rgb(75, 192, 192)');
+
+            // GSR Chart
+            const lightChartData = prepareChartData(lightData, 'value');
+            createChart('lightChart', 'Light Over Time', lightChartData, 'rgb(75, 192, 192)');
         }
         
         // Create a chart

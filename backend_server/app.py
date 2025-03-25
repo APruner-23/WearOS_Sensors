@@ -44,6 +44,16 @@ def init_db():
                 timestamp TEXT NOT NULL
             )
         ''')
+
+        # Create Light table
+        c.execute('''
+            CREATE TABLE light (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id TEXT NOT NULL,
+                value INTEGER NOT NULL,
+                timestamp TEXT NOT NULL
+            )
+        ''')
         
         conn.commit()
         conn.close()
@@ -76,6 +86,18 @@ def init_db():
                 )
             ''')
             print("Created gsr table")
+
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='light'")
+        if not c.fetchone():
+            c.execute('''
+                CREATE TABLE light (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_id TEXT NOT NULL,
+                    value INTEGER NOT NULL,
+                    timestamp TEXT NOT NULL
+                )
+            ''')
+            print("Created light table")
             
         conn.commit()
         conn.close()
@@ -88,7 +110,7 @@ init_db()
 def get_device_ids():
     conn = sqlite3.connect('health_data.db')
     c = conn.cursor()
-    c.execute("SELECT DISTINCT device_id FROM heartrates UNION SELECT DISTINCT device_id FROM skin_temperature UNION SELECT DISTINCT device_id FROM gsr")
+    c.execute("SELECT DISTINCT device_id FROM heartrates UNION SELECT DISTINCT device_id FROM skin_temperature UNION SELECT DISTINCT device_id FROM gsr UNION SELECT DISTINCT device_id FROM light")
     devices = [row[0] for row in c.fetchall()]
     conn.close()
     return devices
@@ -186,6 +208,32 @@ def store_gsr():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/light', methods=['POST'])
+def store_light():
+    try:
+        # Get data from request
+        data = request.json
+        device_id = data.get('device_id', 'unknown')
+        value = data.get('value')
+        timestamp = data.get('timestamp', datetime.datetime.now().isoformat())
+        
+        # Validate data
+        if value is None or not isinstance(value, int):
+            return jsonify({'error': 'Invalid light value'}), 400
+            
+        # Store in database
+        conn = sqlite3.connect('health_data.db')
+        c = conn.cursor()
+        c.execute('INSERT INTO light (device_id, value, timestamp) VALUES (?, ?, ?)',
+                  (device_id, value, timestamp))
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'message': 'light recorded successfully'}), 201
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/heartrate', methods=['GET'])
 def get_heartrates():
@@ -259,6 +307,36 @@ def get_gsr():
         c = conn.cursor()
         
         query = 'SELECT * FROM gsr'
+        params = []
+        
+        if device_id:
+            query += ' WHERE device_id = ?'
+            params.append(device_id)
+            
+        query += ' ORDER BY timestamp DESC LIMIT ?'
+        params.append(limit)
+        
+        c.execute(query, params)
+        results = [dict(row) for row in c.fetchall()]
+        conn.close()
+        
+        return jsonify(results), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/light', methods=['GET'])
+def get_light():
+    try:
+        # Get parameters
+        device_id = request.args.get('device_id', None)
+        limit = request.args.get('limit', 100)
+        
+        conn = sqlite3.connect('health_data.db')
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        
+        query = 'SELECT * FROM light'
         params = []
         
         if device_id:

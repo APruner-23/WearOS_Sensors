@@ -51,8 +51,10 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
     private lateinit var sensorManager: SensorManager
     private var skinTempSensor: Sensor? = null
     private var gsrSensor: Sensor? = null
+    private var lightSensor: Sensor? = null
     private lateinit var skinTempTextView: TextView
     private lateinit var gsrTextView: TextView
+    private lateinit var lightTextView: TextView
 
     private lateinit var ambientController: AmbientModeSupport.AmbientController
 
@@ -123,6 +125,15 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
 
                     sendHealthDataToServer("gsr", gsr.toInt())
                 }
+                lightSensor -> {
+                    val light = event.values[0]
+                    Log.d("LightSensor", "Light: $light")
+                    runOnUiThread {
+                        lightTextView.text = String.format("%.0f", light)
+                    }
+
+                    sendHealthDataToServer("light", light.toInt())
+                }
             }
         }
 
@@ -149,14 +160,20 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
             }
         }
 
-        // Get GSR sensor
+        // Get GSR and light sensor
         val deviceSensors = sensorManager.getSensorList(Sensor.TYPE_ALL)
         for (sensor in deviceSensors) {
-            if (sensor.name.contains("Galvanic", ignoreCase = true)) {
+            if (sensor.name.contains("Galvanic", ignoreCase = true) && gsrSensor == null) {
                 gsrSensor = sensor
                 Log.d("GSRSensor", "Found GSR sensor: ${sensor.name}")
-                break
             }
+
+            if (sensor.name.contains("light", ignoreCase = true) && lightSensor == null) {
+                lightSensor = sensor
+                Log.d("LightSensor", "Found Light sensor: ${sensor.name}")
+            }
+
+            if(gsrSensor != null && lightSensor != null) break
         }
 
         // Register listeners for the sensors
@@ -183,6 +200,18 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
             gsrTextView.text = "No sensor"
             Log.d("GSRSensor", "GSR sensor not found")
         }
+
+        if (lightSensor != null) {
+            sensorManager.registerListener(
+                sensorEventListener,
+                lightSensor,
+                SensorManager.SENSOR_DELAY_NORMAL
+            )
+            lightTextView.text = "Waiting..."
+        } else {
+            lightTextView.text = "No sensor"
+            Log.d("LightSensor", "Light sensor not found")
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -200,6 +229,7 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
         statusTextView = findViewById(R.id.statusTextView)
         skinTempTextView = findViewById(R.id.skinTempTextView)
         gsrTextView = findViewById(R.id.gsrTextView)
+        lightTextView = findViewById(R.id.lightTextView)
 
 
         // Get unique device ID for data identification
@@ -378,6 +408,14 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
             sensorManager.registerListener(
                 sensorEventListener,
                 gsrSensor,
+                SensorManager.SENSOR_DELAY_NORMAL
+            )
+        }
+
+        if (lightSensor != null) {
+            sensorManager.registerListener(
+                sensorEventListener,
+                lightSensor,
                 SensorManager.SENSOR_DELAY_NORMAL
             )
         }
