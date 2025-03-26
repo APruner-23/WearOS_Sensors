@@ -53,6 +53,103 @@ Once done the server will be running on port 5000, and the smartwatch should be 
 
 For our use case we implemented in the app the data regarding HeartRate, Skin Temperature, Galvanic Skin Response and Ambient Light Intensity.
 
+# List of Trackable Exercises
+In order to know what type of exercises we could track and take some information we run this code:
+```
+private fun monitorExercises() {
+        lifecycleScope.launch {
+            val capabilities = exerciseClient.getCapabilities()
+            for (exerciseType in capabilities.supportedExerciseTypes) {
+                Log.d("ExerciseCapabalities", "Supported exercise type: $exerciseType")
+            }
+        }
+    }
+```
+
+The output is the following:
+- ALPINE_SKIING
+- BACKPACKING
+- BACK_EXTENSION
+- BADMINTON
+- BARBELL_SHOULDER_PRESS
+- BASEBALL
+- BASKETBALL
+- BENCH_PRESS
+- BIKING
+- BIKING_STATIONARY
+- BOOT_CAMP
+- BOXING
+- BURPEE
+- CALISTHENICS
+- CRICKET
+- CROSS_COUNTRY_SKIING
+- CRUNCH
+- DANCING
+- DEADLIFT
+- ELLIPTICAL
+- EXERCISE_CLASS
+- FENCING
+- FOOTBALL_AMERICAN
+- FOOTBALL_AUSTRALIAN
+- FRISBEE_DISC
+- GOLF
+- GYMNASTICS
+- HANDBALL
+- HIGH_INTENSITY_INTERVAL_TRAINING
+- HIKING
+- HORSE_RIDING
+- ICE_HOCKEY
+- ICE_SKATING
+- INLINE_SKATING
+- JUMPING_JACK
+- JUMP_ROPE
+- LAT_PULL_DOWN
+- LUNGE
+- MARTIAL_ARTS
+- MEDITATION
+- MOUNTAIN_BIKING
+- UNKNOWN
+- ORIENTEERING
+- PADDLING
+- PARA_GLIDING
+- PILATES
+- PLANK
+- RACQUETBALL
+- ROCK_CLIMBING
+- ROLLER_HOCKEY
+- ROLLER_SKATING
+- ROWING
+- ROWING_MACHINE
+- RUGBY
+- RUNNING
+- RUNNING_TREADMILL
+- SAILING
+- SCUBA_DIVING
+- SKATING
+- SKIING
+- SNOWBOARDING
+- SNOWSHOEING
+- SOCCER
+- SOFTBALL
+- SQUASH
+- SQUAT
+- STAIR_CLIMBING
+- STAIR_CLIMBING_MACHINE
+- STRENGTH_TRAINING
+- STRETCHING
+- SURFING
+- SWIMMING_OPEN_WATER
+- SWIMMING_POOL
+- TABLE_TENNIS
+- TENNIS
+- VOLLEYBALL
+- WALKING
+- WATER_POLO
+- WEIGHTLIFTING
+- WORKOUT
+- YACHTING
+- YOGA
+
 # Battery Consumption (Wear OS App)
 
 2 Tests have been conducted on the Wear OS app to understand how impactful it is on the battery life.
