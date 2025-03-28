@@ -143,7 +143,7 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
     }
 
     private fun initializeSensors() {
-        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
 
         // Get skin temperature sensor
         skinTempSensor = sensorManager.getDefaultSensor(Sensor.TYPE_TEMPERATURE)
@@ -238,7 +238,7 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
         // Initialize Health Services
         healthServicesClient = HealthServices.getClient(this)
 
-        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
 
         initializeSensors()
 

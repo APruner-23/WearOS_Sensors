@@ -150,6 +150,8 @@ The output is the following:
 - YACHTING
 - YOGA
 
+Exercise tracking is not implemented in the current version of the app.
+
 # Battery Consumption (Wear OS App)
 
 2 Tests have been conducted on the Wear OS app to understand how impactful it is on the battery life.

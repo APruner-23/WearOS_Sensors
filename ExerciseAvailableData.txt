@@ -1,0 +1,18 @@
+ExerciseTypeCapabilities(supportedDataTypes=[
+DataType(name=Calories, timeType=INTERVAL, class=Double, isAggregate=false), 
+DataType(name=Calories, timeType=INTERVAL, class=Double, isAggregate=true), 
+DataType(name=Distance, timeType=INTERVAL, class=Double, isAggregate=false), 
+DataType(name=Distance, timeType=INTERVAL, class=Double, isAggregate=true), 
+DataType(name=Steps, timeType=INTERVAL, class=Long, isAggregate=false), 
+DataType(name=Steps, timeType=INTERVAL, class=Long, isAggregate=true), 
+DataType(name=HeartRate, timeType=SAMPLE, class=Double, isAggregate=false), 
+DataType(name=HeartRate, timeType=SAMPLE, class=Double, isAggregate=true), 
+DataType(name=Location, timeType=SAMPLE, class=LocationData, isAggregate=false)], supportedGoals={DataType(name=Active Exercise Duration, timeType=INTERVAL, class=Long, isAggregate=true)=[GREATER_THAN_OR_EQUAL, GREATER_THAN], 
+DataType(name=Calories, timeType=INTERVAL, class=Double, isAggregate=true)=[GREATER_THAN_OR_EQUAL, GREATER_THAN], 
+DataType(name=Distance, timeType=INTERVAL, class=Double, isAggregate=true)=[GREATER_THAN_OR_EQUAL, GREATER_THAN], 
+DataType(name=HeartRate, timeType=SAMPLE, class=Double, isAggregate=true)=[GREATER_THAN_OR_EQUAL, GREATER_THAN, LESS_THAN_OR_EQUAL, LESS_THAN], 
+DataType(name=Steps, timeType=INTERVAL, class=Long, isAggregate=true)=[GREATER_THAN_OR_EQUAL, GREATER_THAN]}, supportedMilestones={DataType(name=Active Exercise Duration, timeType=INTERVAL, class=Long, isAggregate=true)=[GREATER_THAN_OR_EQUAL, GREATER_THAN], 
+DataType(name=Calories, timeType=INTERVAL, class=Double, isAggregate=true)=[GREATER_THAN_OR_EQUAL, GREATER_THAN], 
+DataType(name=Distance, timeType=INTERVAL, class=Double, isAggregate=true)=[GREATER_THAN_OR_EQUAL, GREATER_THAN], 
+DataType(name=HeartRate, timeType=SAMPLE, class=Double, isAggregate=true)=[GREATER_THAN_OR_EQUAL, GREATER_THAN, LESS_THAN_OR_EQUAL, LESS_THAN], 
+DataType(name=Steps, timeType=INTERVAL, class=Long, isAggregate=true)=[GREATER_THAN_OR_EQUAL, GREATER_THAN]}, supportsAutoPauseAndResume=false, supportedDebouncedGoals={DataType(name=HeartRate, timeType=SAMPLE, class=Double, isAggregate=false)=[GREATER_THAN_OR_EQUAL, GREATER_THAN, LESS_THAN_OR_EQUAL, LESS_THAN], DataType(name=HeartRate, timeType=SAMPLE, class=Double, isAggregate=true)=[GREATER_THAN_OR_EQUAL, GREATER_THAN, LESS_THAN_OR_EQUAL, LESS_THAN]}, )
