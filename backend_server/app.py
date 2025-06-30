@@ -54,6 +54,40 @@ def init_db():
                 timestamp TEXT NOT NULL
             )
         ''')
+
+        # Create PPG table
+        c.execute('''
+            CREATE TABLE ppg (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id TEXT NOT NULL,
+                value INTEGER NOT NULL,
+                timestamp TEXT NOT NULL
+            )
+        ''')
+
+        # Create Accelerometer table
+        c.execute('''
+            CREATE TABLE accelerometer (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id TEXT NOT NULL,
+                x_value REAL NOT NULL,
+                y_value REAL NOT NULL,
+                z_value REAL NOT NULL,
+                timestamp TEXT NOT NULL
+            )
+        ''')
+
+        # Create Gyroscope table
+        c.execute('''
+            CREATE TABLE gyroscope (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id TEXT NOT NULL,
+                x_value REAL NOT NULL,
+                y_value REAL NOT NULL,
+                z_value REAL NOT NULL,
+                timestamp TEXT NOT NULL
+            )
+        ''')
         
         conn.commit()
         conn.close()
@@ -98,6 +132,46 @@ def init_db():
                 )
             ''')
             print("Created light table")
+
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ppg'")
+        if not c.fetchone():
+            c.execute('''
+                CREATE TABLE ppg (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_id TEXT NOT NULL,
+                    value INTEGER NOT NULL,
+                    timestamp TEXT NOT NULL
+                )
+            ''')
+            print("Created ppg table")
+
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='accelerometer'")
+        if not c.fetchone():
+            c.execute('''
+                CREATE TABLE accelerometer (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_id TEXT NOT NULL,
+                    x_value REAL NOT NULL,
+                    y_value REAL NOT NULL,
+                    z_value REAL NOT NULL,
+                    timestamp TEXT NOT NULL
+                )
+            ''')
+            print("Created accelerometer table")
+
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='gyroscope'")
+        if not c.fetchone():
+            c.execute('''
+                CREATE TABLE gyroscope (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_id TEXT NOT NULL,
+                    x_value REAL NOT NULL,
+                    y_value REAL NOT NULL,
+                    z_value REAL NOT NULL,
+                    timestamp TEXT NOT NULL
+                )
+            ''')
+            print("Created gyroscope table")
             
         conn.commit()
         conn.close()
@@ -234,6 +308,81 @@ def store_light():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+
+@app.route('/api/ppg', methods=['POST'])
+def store_ppg():
+    try:
+        # Get data from request
+        data = request.json
+        device_id = data.get('device_id', 'unknown')
+        value = data.get('value')
+        timestamp = data.get('timestamp', datetime.datetime.now().isoformat())
+
+        # Validate data
+        if value is None or not isinstance(value, int):
+            return jsonify({'error': 'Invalid PPG value'}), 400
+
+        # Store in database
+        conn = sqlite3.connect('health_data.db')
+        c = conn.cursor()
+        c.execute('INSERT INTO ppg (device_id, value, timestamp) VALUES (?, ?, ?)',
+                  (device_id, value, timestamp))
+        conn.commit()
+        conn.close()
+
+        return jsonify({'message': 'PPG recorded successfully'}), 201
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/accelerometer', methods=['POST'])
+def store_accelerometer():
+    try:
+        # Get data from request
+        data = request.json
+        device_id = data.get('device_id', 'unknown')
+        x_value = data.get('x_value')
+        y_value = data.get('y_value')
+        z_value = data.get('z_value')
+        timestamp = data.get('timestamp', datetime.datetime.now().isoformat())
+
+        # Store in database
+        conn = sqlite3.connect('health_data.db')
+        c = conn.cursor()
+        c.execute('INSERT INTO accelerometer (device_id, x_value, y_value, z_value, timestamp) VALUES (?, ?, ?, ?, ?)',
+                  (device_id, x_value, y_value, z_value, timestamp))
+        conn.commit()
+        conn.close()
+
+        return jsonify({'message': 'Accelerometer data recorded successfully'}), 201
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/gyroscope', methods=['POST'])
+def store_gyroscope():
+    try:
+        # Get data from request
+        data = request.json
+        device_id = data.get('device_id', 'unknown')
+        x_value = data.get('x_value')
+        y_value = data.get('y_value')
+        z_value = data.get('z_value')
+        timestamp = data.get('timestamp', datetime.datetime.now().isoformat())
+
+        # Store in database
+        conn = sqlite3.connect('health_data.db')
+        c = conn.cursor()
+        c.execute('INSERT INTO gyroscope (device_id, x_value, y_value, z_value, timestamp) VALUES (?, ?, ?, ?, ?)',
+                  (device_id, x_value, y_value, z_value, timestamp))
+        conn.commit()
+        conn.close()
+
+        return jsonify({'message': 'Gyroscope data recorded successfully'}), 201
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/heartrate', methods=['GET'])
 def get_heartrates():
@@ -354,8 +503,98 @@ def get_light():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/ppg', methods=['GET'])
+def get_ppg():
+    try:
+        # Get parameters
+        device_id = request.args.get('device_id', None)
+        limit = request.args.get('limit', 100)
+        
+        conn = sqlite3.connect('health_data.db')
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        
+        query = 'SELECT * FROM ppg'
+        params = []
+        
+        if device_id:
+            query += ' WHERE device_id = ?'
+            params.append(device_id)
+            
+        query += ' ORDER BY timestamp DESC LIMIT ?'
+        params.append(limit)
+        
+        c.execute(query, params)
+        results = [dict(row) for row in c.fetchall()]
+        conn.close()
+        
+        return jsonify(results), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/accelerometer', methods=['GET'])
+def get_accelerometer():
+    try:
+        # Get parameters
+        device_id = request.args.get('device_id', None)
+        limit = request.args.get('limit', 100)
+        
+        conn = sqlite3.connect('health_data.db')
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        
+        query = 'SELECT * FROM accelerometer'
+        params = []
+        
+        if device_id:
+            query += ' WHERE device_id = ?'
+            params.append(device_id)
+            
+        query += ' ORDER BY timestamp DESC LIMIT ?'
+        params.append(limit)
+        
+        c.execute(query, params)
+        results = [dict(row) for row in c.fetchall()]
+        conn.close()
+        
+        return jsonify(results), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/gyroscope', methods=['GET'])
+def get_gyroscope():
+    try:
+        # Get parameters
+        device_id = request.args.get('device_id', None)
+        limit = request.args.get('limit', 100)
+        
+        conn = sqlite3.connect('health_data.db')
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        
+        query = 'SELECT * FROM gyroscope'
+        params = []
+        
+        if device_id:
+            query += ' WHERE device_id = ?'
+            params.append(device_id)
+            
+        query += ' ORDER BY timestamp DESC LIMIT ?'
+        params.append(limit)
+        
+        c.execute(query, params)
+        results = [dict(row) for row in c.fetchall()]
+        conn.close()
+        
+        return jsonify(results), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # Run the server
 if __name__ == '__main__':
     print("Starting Health Data Server...")
-    app.run(host='192.168.0.162', port=5000, debug=True)
+    app.run(host='192.168.0.98', port=5000, debug=True)

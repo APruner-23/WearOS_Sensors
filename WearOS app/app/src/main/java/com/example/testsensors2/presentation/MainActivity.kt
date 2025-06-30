@@ -52,6 +52,9 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
     private var skinTempSensor: Sensor? = null
     private var gsrSensor: Sensor? = null
     private var lightSensor: Sensor? = null
+    private var ppgSensor: Sensor? = null
+    private var accelerometerSensor: Sensor? = null
+    private var gyroscopeSensor: Sensor? = null
     private lateinit var skinTempTextView: TextView
     private lateinit var gsrTextView: TextView
     private lateinit var lightTextView: TextView
@@ -59,7 +62,8 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
     private lateinit var ambientController: AmbientModeSupport.AmbientController
 
     // Backend Server IP Address
-    private val SERVER_URL = "http://192.168.0.162:5000/api"
+    private val SERVER_URL = "http://192.168.0.98:5000/api"
+    private val samplingPeriod = 33_333 //30 Hz
     // String representing the device ID
     private lateinit var deviceId: String
 
@@ -134,6 +138,37 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
 
                     sendHealthDataToServer("light", light.toInt())
                 }
+
+                ppgSensor -> {
+                    val ppg = event.values[0]
+                    Log.d("PPGSensor", "Light: $ppg")
+
+                    sendHealthDataToServer("ppg", ppg.toInt())
+                }
+
+                accelerometerSensor -> {
+                    val accX = event.values[0]
+                    val accY = event.values[1]
+                    val accZ = event.values[2]
+
+                    Log.d("accX", accX.toString())
+                    Log.d("accY", accY.toString())
+                    Log.d("accZ", accZ.toString())
+
+                    sendMotionDataToServer("accelerometer", accX.toDouble(), accY.toDouble(), accZ.toDouble())
+                }
+
+                gyroscopeSensor -> {
+                    val gyrX = event.values[0]
+                    val gyrY = event.values[1]
+                    val gyrZ = event.values[2]
+
+                    Log.d("gyrX", gyrX.toString())
+                    Log.d("gyrY", gyrY.toString())
+                    Log.d("gyrZ", gyrZ.toString())
+
+                    sendMotionDataToServer("gyroscope", gyrX.toDouble(), gyrY.toDouble(), gyrZ.toDouble())
+                }
             }
         }
 
@@ -160,9 +195,12 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
             }
         }
 
-        // Get GSR and light sensor
+        // Get GSR, light sensor, PPG Sensor, Accelerometer and Gyroscope
         val deviceSensors = sensorManager.getSensorList(Sensor.TYPE_ALL)
+        Log.d("Sensors", "Found ${deviceSensors.size} sensors")
+
         for (sensor in deviceSensors) {
+            Log.d("Sensor", "SensorName: ${sensor.name}")
             if (sensor.name.contains("Galvanic", ignoreCase = true) && gsrSensor == null) {
                 gsrSensor = sensor
                 Log.d("GSRSensor", "Found GSR sensor: ${sensor.name}")
@@ -173,8 +211,24 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
                 Log.d("LightSensor", "Found Light sensor: ${sensor.name}")
             }
 
-            if(gsrSensor != null && lightSensor != null) break
+            if (sensor.name.contains("PPG Controller", ignoreCase = true) && ppgSensor == null) {
+                ppgSensor = sensor
+                Log.d("PPGSensor", "Found PPG sensor: ${sensor.name}")
+            }
+
+            if (sensor.name.contains("Accelerometer", ignoreCase = true) && accelerometerSensor == null) {
+                accelerometerSensor = sensor
+                Log.d("AccelerometerSensor", "Found Accelerometer: ${sensor.name}")
+            }
+
+            if (sensor.name.contains("Gyroscope", ignoreCase = true) && gyroscopeSensor == null) {
+                gyroscopeSensor = sensor
+                Log.d("GyroscopeSensor", "Found Gyroscope: ${sensor.name}")
+            }
+
+            if(gsrSensor != null && lightSensor != null && ppgSensor != null && accelerometerSensor != null && gyroscopeSensor != null) break
         }
+
 
         // Register listeners for the sensors
         if (skinTempSensor != null) {
@@ -211,6 +265,36 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
         } else {
             lightTextView.text = "No sensor"
             Log.d("LightSensor", "Light sensor not found")
+        }
+
+        if (ppgSensor != null) {
+            sensorManager.registerListener(
+                sensorEventListener,
+                ppgSensor,
+                SensorManager.SENSOR_DELAY_NORMAL
+            )
+        } else {
+            Log.d("PPGSensor", "PPG sensor not found")
+        }
+
+        if (accelerometerSensor != null) {
+            sensorManager.registerListener(
+                sensorEventListener,
+                accelerometerSensor,
+                samplingPeriod
+            )
+        } else {
+            Log.d("AccelerometerSensor", "Accelerometer not found")
+        }
+
+        if (gyroscopeSensor != null) {
+            sensorManager.registerListener(
+                sensorEventListener,
+                gyroscopeSensor,
+                samplingPeriod
+            )
+        } else {
+            Log.d("GyroscopeSensor", "Gyroscope not found")
         }
     }
 
@@ -367,6 +451,51 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
         }
     }
 
+    // Used to send Accelerometer and Gyroscope data to the server
+    private fun sendMotionDataToServer(dataType: String, valueX: Double, valueY: Double, valueZ: Double) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                // Create JSON payload
+                val jsonPayload = JSONObject().apply {
+                    put("device_id", deviceId)
+                    put("data_type", dataType)
+                    put("x_value", valueX)
+                    put("y_value", valueY)
+                    put("z_value", valueZ)
+                    put("timestamp", timestampFormat.format(Date()))
+                }
+
+                // Setup HTTP connection
+                val url = URL("$SERVER_URL/$dataType")
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.doOutput = true
+
+                // Send data
+                val outputStream = connection.outputStream
+                val writer = OutputStreamWriter(outputStream)
+                writer.write(jsonPayload.toString())
+                writer.flush()
+                writer.close()
+
+                // Check response
+                val responseCode = connection.responseCode
+                val success = responseCode in 200..299
+
+                withContext(Dispatchers.Main) {
+                    statusTextView.text = if (success) "Data sent successfully" else "Send failed: $responseCode"
+                }
+
+                connection.disconnect()
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    statusTextView.text = "Error: ${e.message}"
+                }
+            }
+        }
+    }
+
     override fun onPause() {
         super.onPause()
         sensorManager.unregisterListener(sensorEventListener)
@@ -419,6 +548,30 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
                 SensorManager.SENSOR_DELAY_NORMAL
             )
         }
+
+        if (ppgSensor != null) {
+            sensorManager.registerListener(
+                sensorEventListener,
+                ppgSensor,
+                SensorManager.SENSOR_DELAY_NORMAL
+            )
+        }
+
+        if (accelerometerSensor != null) {
+            sensorManager.registerListener(
+                sensorEventListener,
+                accelerometerSensor,
+                samplingPeriod
+            )
+        }
+
+        if (gyroscopeSensor != null) {
+            sensorManager.registerListener(
+                sensorEventListener,
+                gyroscopeSensor,
+                samplingPeriod
+            )
+        }
     }
 
     private inner class MyAmbientCallback : AmbientModeSupport.AmbientCallback() {
@@ -443,6 +596,5 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
     override fun getAmbientCallback(): AmbientModeSupport.AmbientCallback {
         return MyAmbientCallback()
     }
-
 
 }

@@ -51,7 +51,7 @@ Once done the server will be running on port 5000, and the smartwatch should be 
 - PPG Sensor
 - Step Cadence: Steps rate
 
-For our use case we implemented in the app the data regarding HeartRate, Skin Temperature, Galvanic Skin Response and Ambient Light Intensity.
+For our use case we implemented in the app the data regarding HeartRate, Skin Temperature, Galvanic Skin Response, Ambient Light Intensity, PPG Sensor value, Accelerometer and Gyroscope.
 
 # List of Trackable Exercises
 In order to know what type of exercises we could track and take some information we run this code:
