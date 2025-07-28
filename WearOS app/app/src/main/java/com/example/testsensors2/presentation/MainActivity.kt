@@ -34,6 +34,7 @@ import com.example.testsensors2.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
@@ -41,6 +42,14 @@ import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.Timer
+import java.util.TimerTask
+import java.util.concurrent.ConcurrentLinkedQueue
+
+// Data classes for storing sensor readings
+data class HeartRateReading(val value: Int, val timestamp: String)
+data class HealthDataReading(val dataType: String, val value: Int, val timestamp: String)
+data class MotionDataReading(val dataType: String, val x: Double, val y: Double, val z: Double, val timestamp: String)
 
 class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvider {
     private lateinit var heartRateTextView: TextView
@@ -64,11 +73,21 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
     // Backend Server IP Address
     private val SERVER_URL = "http://192.168.0.98:5000/api"
     private val samplingPeriod = 33_333 //30 Hz
+    private val BATCH_SEND_INTERVAL = 10_000L // 10 seconds in milliseconds
+
     // String representing the device ID
     private lateinit var deviceId: String
 
     // Timestamp formatter
     private val timestampFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.UK)
+
+    // Data storage queues for batching
+    private val heartRateQueue = ConcurrentLinkedQueue<HeartRateReading>()
+    private val healthDataQueue = ConcurrentLinkedQueue<HealthDataReading>()
+    private val motionDataQueue = ConcurrentLinkedQueue<MotionDataReading>()
+
+    // Timer for batch sending
+    private var batchSendTimer: Timer? = null
 
     // Callback for heart rate data
     private val measureCallback = object : MeasureCallback {
@@ -87,10 +106,13 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
                 if (sample is SampleDataPoint<Double>) {
                     val heartRate = sample.value.toInt()
                     // Set the heart rate value in the TextView
-                    heartRateTextView.text = "$heartRate"
+                    runOnUiThread {
+                        heartRateTextView.text = "$heartRate"
+                    }
 
-                    // Send heart rate to backend server
-                    sendHeartRateToServer(heartRate)
+                    // Add to queue for batch sending
+                    val reading = HeartRateReading(heartRate, timestampFormat.format(Date()))
+                    heartRateQueue.offer(reading)
                 }
             }
         }
@@ -110,6 +132,8 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
     // Sensor event listener
     private val sensorEventListener = object : SensorEventListener {
         override fun onSensorChanged(event: SensorEvent) {
+            val timestamp = timestampFormat.format(Date())
+
             when (event.sensor) {
                 skinTempSensor -> {
                     val skinTemp = event.values[0]
@@ -118,7 +142,9 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
                         skinTempTextView.text = String.format("%.1f°C", skinTemp)
                     }
 
-                    sendHealthDataToServer("skin_temperature", skinTemp.toInt())
+                    // Add to queue for batch sending
+                    val reading = HealthDataReading("skin_temperature", skinTemp.toInt(), timestamp)
+                    healthDataQueue.offer(reading)
                 }
                 gsrSensor -> {
                     val gsr = event.values[0]
@@ -127,7 +153,9 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
                         gsrTextView.text = String.format("%.0f kΩ", gsr)
                     }
 
-                    sendHealthDataToServer("gsr", gsr.toInt())
+                    // Add to queue for batch sending
+                    val reading = HealthDataReading("gsr", gsr.toInt(), timestamp)
+                    healthDataQueue.offer(reading)
                 }
                 lightSensor -> {
                     val light = event.values[0]
@@ -136,14 +164,18 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
                         lightTextView.text = String.format("%.0f", light)
                     }
 
-                    sendHealthDataToServer("light", light.toInt())
+                    // Add to queue for batch sending
+                    val reading = HealthDataReading("light", light.toInt(), timestamp)
+                    healthDataQueue.offer(reading)
                 }
 
                 ppgSensor -> {
                     val ppg = event.values[0]
-                    Log.d("PPGSensor", "Light: $ppg")
+                    Log.d("PPGSensor", "PPG: $ppg")
 
-                    sendHealthDataToServer("ppg", ppg.toInt())
+                    // Add to queue for batch sending
+                    val reading = HealthDataReading("ppg", ppg.toInt(), timestamp)
+                    healthDataQueue.offer(reading)
                 }
 
                 accelerometerSensor -> {
@@ -155,7 +187,9 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
                     Log.d("accY", accY.toString())
                     Log.d("accZ", accZ.toString())
 
-                    sendMotionDataToServer("accelerometer", accX.toDouble(), accY.toDouble(), accZ.toDouble())
+                    // Add to queue for batch sending
+                    val reading = MotionDataReading("accelerometer", accX.toDouble(), accY.toDouble(), accZ.toDouble(), timestamp)
+                    motionDataQueue.offer(reading)
                 }
 
                 gyroscopeSensor -> {
@@ -167,13 +201,148 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
                     Log.d("gyrY", gyrY.toString())
                     Log.d("gyrZ", gyrZ.toString())
 
-                    sendMotionDataToServer("gyroscope", gyrX.toDouble(), gyrY.toDouble(), gyrZ.toDouble())
+                    // Add to queue for batch sending
+                    val reading = MotionDataReading("gyroscope", gyrX.toDouble(), gyrY.toDouble(), gyrZ.toDouble(), timestamp)
+                    motionDataQueue.offer(reading)
                 }
             }
         }
 
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
             // Not handling accuracy changes
+        }
+    }
+
+    private fun startBatchSendTimer() {
+        batchSendTimer?.cancel()
+        batchSendTimer = Timer()
+        batchSendTimer?.scheduleAtFixedRate(object : TimerTask() {
+            override fun run() {
+                sendBatchedDataToServer()
+            }
+        }, BATCH_SEND_INTERVAL, BATCH_SEND_INTERVAL)
+    }
+
+    private fun stopBatchSendTimer() {
+        batchSendTimer?.cancel()
+        batchSendTimer = null
+    }
+
+    private fun sendBatchedDataToServer() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                // Collect all data from queues
+                val heartRateData = mutableListOf<HeartRateReading>()
+                val healthData = mutableListOf<HealthDataReading>()
+                val motionData = mutableListOf<MotionDataReading>()
+
+                // Drain queues
+                while (heartRateQueue.isNotEmpty()) {
+                    heartRateQueue.poll()?.let { heartRateData.add(it) }
+                }
+                while (healthDataQueue.isNotEmpty()) {
+                    healthDataQueue.poll()?.let { healthData.add(it) }
+                }
+                while (motionDataQueue.isNotEmpty()) {
+                    motionDataQueue.poll()?.let { motionData.add(it) }
+                }
+
+                val totalDataPoints = heartRateData.size + healthData.size + motionData.size
+
+                if (totalDataPoints == 0) {
+                    Log.d("BatchSend", "No data to send")
+                    return@launch
+                }
+
+                Log.d("BatchSend", "Sending batch: HR=${heartRateData.size}, Health=${healthData.size}, Motion=${motionData.size}")
+
+                // Create batch payload
+                val batchPayload = JSONObject().apply {
+                    put("device_id", deviceId)
+                    put("batch_timestamp", timestampFormat.format(Date()))
+
+                    // Heart rate data
+                    if (heartRateData.isNotEmpty()) {
+                        val heartRateArray = JSONArray()
+                        heartRateData.forEach { reading ->
+                            val hrObject = JSONObject().apply {
+                                put("heart_rate", reading.value)
+                                put("timestamp", reading.timestamp)
+                            }
+                            heartRateArray.put(hrObject)
+                        }
+                        put("heart_rate_data", heartRateArray)
+                    }
+
+                    // Health data (skin temp, GSR, light, PPG)
+                    if (healthData.isNotEmpty()) {
+                        val healthArray = JSONArray()
+                        healthData.forEach { reading ->
+                            val healthObject = JSONObject().apply {
+                                put("data_type", reading.dataType)
+                                put("value", reading.value)
+                                put("timestamp", reading.timestamp)
+                            }
+                            healthArray.put(healthObject)
+                        }
+                        put("health_data", healthArray)
+                    }
+
+                    // Motion data (accelerometer, gyroscope)
+                    if (motionData.isNotEmpty()) {
+                        val motionArray = JSONArray()
+                        motionData.forEach { reading ->
+                            val motionObject = JSONObject().apply {
+                                put("data_type", reading.dataType)
+                                put("x_value", reading.x)
+                                put("y_value", reading.y)
+                                put("z_value", reading.z)
+                                put("timestamp", reading.timestamp)
+                            }
+                            motionArray.put(motionObject)
+                        }
+                        put("motion_data", motionArray)
+                    }
+                }
+
+                // Send batch to server
+                val url = URL("$SERVER_URL/batch")
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.doOutput = true
+                connection.connectTimeout = 10000 // 10 seconds timeout
+                connection.readTimeout = 10000
+
+                // Send data
+                val outputStream = connection.outputStream
+                val writer = OutputStreamWriter(outputStream)
+                writer.write(batchPayload.toString())
+                writer.flush()
+                writer.close()
+
+                // Check response
+                val responseCode = connection.responseCode
+                val success = responseCode in 200..299
+
+                withContext(Dispatchers.Main) {
+                    statusTextView.text = if (success) {
+                        "Batch sent: $totalDataPoints points"
+                    } else {
+                        "Batch failed: $responseCode"
+                    }
+                }
+
+                connection.disconnect()
+
+                Log.d("BatchSend", "Batch sent successfully. Response: $responseCode")
+
+            } catch (e: Exception) {
+                Log.e("BatchSend", "Error sending batch: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    statusTextView.text = "Batch error: ${e.message}"
+                }
+            }
         }
     }
 
@@ -228,7 +397,6 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
 
             if(gsrSensor != null && lightSensor != null && ppgSensor != null && accelerometerSensor != null && gyroscopeSensor != null) break
         }
-
 
         // Register listeners for the sensors
         if (skinTempSensor != null) {
@@ -315,7 +483,6 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
         gsrTextView = findViewById(R.id.gsrTextView)
         lightTextView = findViewById(R.id.lightTextView)
 
-
         // Get unique device ID for data identification
         deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
 
@@ -325,6 +492,7 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
 
         initializeSensors()
+        startBatchSendTimer() // Start the batch sending timer
 
         checkPermissionAndStartMonitoring()
     }
@@ -359,139 +527,11 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
 
                 // Register callback and start measuring
                 measureClient.registerMeasureCallback(DataType.HEART_RATE_BPM, measureCallback)
-                statusTextView.text = "Connected to server"
+                statusTextView.text = "Batching data..."
                 measuring = true
             } catch (e: Exception) {
                 heartRateTextView.text = "Error: ${e.message}"
                 statusTextView.text = "Error starting measurement"
-            }
-        }
-    }
-
-    private fun sendHeartRateToServer(heartRate: Int) {
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                // Create JSON payload
-                val jsonPayload = JSONObject().apply {
-                    put("device_id", deviceId)
-                    put("heart_rate", heartRate)
-                    put("timestamp", timestampFormat.format(Date()))
-                }
-
-                // Setup HTTP connection
-                val url = URL("$SERVER_URL/heartrate")
-                val connection = url.openConnection() as HttpURLConnection
-                connection.requestMethod = "POST"
-                connection.setRequestProperty("Content-Type", "application/json")
-                connection.doOutput = true
-
-                // Send data
-                val outputStream = connection.outputStream
-                val writer = OutputStreamWriter(outputStream)
-                writer.write(jsonPayload.toString())
-                writer.flush()
-                writer.close()
-
-                // Check response
-                val responseCode = connection.responseCode
-                val success = responseCode in 200..299
-
-                withContext(Dispatchers.Main) {
-                    statusTextView.text = if (success) "Data sent successfully" else "Send failed: $responseCode"
-                }
-
-                connection.disconnect()
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    statusTextView.text = "Error: ${e.message}"
-                }
-            }
-        }
-    }
-
-    private fun sendHealthDataToServer(dataType: String, value: Int) {
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                // Create JSON payload
-                val jsonPayload = JSONObject().apply {
-                    put("device_id", deviceId)
-                    put("data_type", dataType)
-                    put("value", value)
-                    put("timestamp", timestampFormat.format(Date()))
-                }
-
-                // Setup HTTP connection
-                val url = URL("$SERVER_URL/$dataType")
-                val connection = url.openConnection() as HttpURLConnection
-                connection.requestMethod = "POST"
-                connection.setRequestProperty("Content-Type", "application/json")
-                connection.doOutput = true
-
-                // Send data
-                val outputStream = connection.outputStream
-                val writer = OutputStreamWriter(outputStream)
-                writer.write(jsonPayload.toString())
-                writer.flush()
-                writer.close()
-
-                // Check response
-                val responseCode = connection.responseCode
-                val success = responseCode in 200..299
-
-                withContext(Dispatchers.Main) {
-                    statusTextView.text = if (success) "Data sent successfully" else "Send failed: $responseCode"
-                }
-
-                connection.disconnect()
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    statusTextView.text = "Error: ${e.message}"
-                }
-            }
-        }
-    }
-
-    // Used to send Accelerometer and Gyroscope data to the server
-    private fun sendMotionDataToServer(dataType: String, valueX: Double, valueY: Double, valueZ: Double) {
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                // Create JSON payload
-                val jsonPayload = JSONObject().apply {
-                    put("device_id", deviceId)
-                    put("data_type", dataType)
-                    put("x_value", valueX)
-                    put("y_value", valueY)
-                    put("z_value", valueZ)
-                    put("timestamp", timestampFormat.format(Date()))
-                }
-
-                // Setup HTTP connection
-                val url = URL("$SERVER_URL/$dataType")
-                val connection = url.openConnection() as HttpURLConnection
-                connection.requestMethod = "POST"
-                connection.setRequestProperty("Content-Type", "application/json")
-                connection.doOutput = true
-
-                // Send data
-                val outputStream = connection.outputStream
-                val writer = OutputStreamWriter(outputStream)
-                writer.write(jsonPayload.toString())
-                writer.flush()
-                writer.close()
-
-                // Check response
-                val responseCode = connection.responseCode
-                val success = responseCode in 200..299
-
-                withContext(Dispatchers.Main) {
-                    statusTextView.text = if (success) "Data sent successfully" else "Send failed: $responseCode"
-                }
-
-                connection.disconnect()
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    statusTextView.text = "Error: ${e.message}"
-                }
             }
         }
     }
@@ -515,8 +555,9 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
                 }
             }
         }
-        // Unregister sensor listeners
-        sensorManager.unregisterListener(sensorEventListener)
+
+        // Stop the batch timer when app is paused
+        stopBatchSendTimer()
     }
 
     override fun onResume() {
@@ -525,6 +566,9 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
         if (!measuring) {
             checkPermissionAndStartMonitoring()
         }
+
+        // Restart the batch timer
+        startBatchSendTimer()
 
         if (skinTempSensor != null) {
             sensorManager.registerListener(
@@ -574,6 +618,14 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        stopBatchSendTimer()
+
+        // Send any remaining data before destroying
+        sendBatchedDataToServer()
+    }
+
     private inner class MyAmbientCallback : AmbientModeSupport.AmbientCallback() {
         override fun onEnterAmbient(ambientDetails: Bundle?) {
             super.onEnterAmbient(ambientDetails)
@@ -596,5 +648,4 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
     override fun getAmbientCallback(): AmbientModeSupport.AmbientCallback {
         return MyAmbientCallback()
     }
-
 }

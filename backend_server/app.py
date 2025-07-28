@@ -88,6 +88,21 @@ def init_db():
                 timestamp TEXT NOT NULL
             )
         ''')
+
+        # Create batch_logs table to track batch processing
+        c.execute('''
+            CREATE TABLE batch_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id TEXT NOT NULL,
+                batch_timestamp TEXT NOT NULL,
+                heart_rate_count INTEGER DEFAULT 0,
+                health_data_count INTEGER DEFAULT 0,
+                motion_data_count INTEGER DEFAULT 0,
+                total_records INTEGER DEFAULT 0,
+                processing_time_ms INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL
+            )
+        ''')
         
         conn.commit()
         conn.close()
@@ -172,6 +187,24 @@ def init_db():
                 )
             ''')
             print("Created gyroscope table")
+
+        # Check for batch_logs table
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='batch_logs'")
+        if not c.fetchone():
+            c.execute('''
+                CREATE TABLE batch_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_id TEXT NOT NULL,
+                    batch_timestamp TEXT NOT NULL,
+                    heart_rate_count INTEGER DEFAULT 0,
+                    health_data_count INTEGER DEFAULT 0,
+                    motion_data_count INTEGER DEFAULT 0,
+                    total_records INTEGER DEFAULT 0,
+                    processing_time_ms INTEGER DEFAULT 0,
+                    created_at TEXT NOT NULL
+                )
+            ''')
+            print("Created batch_logs table")
             
         conn.commit()
         conn.close()
@@ -189,6 +222,212 @@ def get_device_ids():
     conn.close()
     return devices
 
+# NEW: Batch processing endpoint
+@app.route('/api/batch', methods=['POST'])
+def store_batch_data():
+    try:
+        import time
+        start_time = time.time()
+        
+        # Get batch data from request
+        data = request.json
+        device_id = data.get('device_id', 'unknown')
+        batch_timestamp = data.get('batch_timestamp', datetime.datetime.now().isoformat())
+        
+        # Initialize counters
+        heart_rate_count = 0
+        health_data_count = 0
+        motion_data_count = 0
+        
+        conn = sqlite3.connect('health_data.db')
+        c = conn.cursor()
+        
+        # Begin transaction for atomic batch processing
+        c.execute('BEGIN TRANSACTION')
+        
+        try:
+            # Process heart rate data
+            if 'heart_rate_data' in data and data['heart_rate_data']:
+                heart_rate_batch = []
+                for hr_reading in data['heart_rate_data']:
+                    heart_rate_batch.append((
+                        device_id,
+                        hr_reading.get('heart_rate'),
+                        hr_reading.get('timestamp')
+                    ))
+                
+                c.executemany(
+                    'INSERT INTO heartrates (device_id, heart_rate, timestamp) VALUES (?, ?, ?)',
+                    heart_rate_batch
+                )
+                heart_rate_count = len(heart_rate_batch)
+                print(f"Inserted {heart_rate_count} heart rate readings")
+
+            # Process health data (skin temp, GSR, light, PPG)
+            if 'health_data' in data and data['health_data']:
+                # Group health data by type for batch insertion
+                skin_temp_batch = []
+                gsr_batch = []
+                light_batch = []
+                ppg_batch = []
+                
+                for health_reading in data['health_data']:
+                    data_type = health_reading.get('data_type')
+                    value = health_reading.get('value')
+                    timestamp = health_reading.get('timestamp')
+                    
+                    if data_type == 'skin_temperature':
+                        skin_temp_batch.append((device_id, value, timestamp))
+                    elif data_type == 'gsr':
+                        gsr_batch.append((device_id, value, timestamp))
+                    elif data_type == 'light':
+                        light_batch.append((device_id, value, timestamp))
+                    elif data_type == 'ppg':
+                        ppg_batch.append((device_id, value, timestamp))
+                
+                # Insert batched health data
+                if skin_temp_batch:
+                    c.executemany(
+                        'INSERT INTO skin_temperature (device_id, value, timestamp) VALUES (?, ?, ?)',
+                        skin_temp_batch
+                    )
+                    print(f"Inserted {len(skin_temp_batch)} skin temperature readings")
+                
+                if gsr_batch:
+                    c.executemany(
+                        'INSERT INTO gsr (device_id, value, timestamp) VALUES (?, ?, ?)',
+                        gsr_batch
+                    )
+                    print(f"Inserted {len(gsr_batch)} GSR readings")
+                
+                if light_batch:
+                    c.executemany(
+                        'INSERT INTO light (device_id, value, timestamp) VALUES (?, ?, ?)',
+                        light_batch
+                    )
+                    print(f"Inserted {len(light_batch)} light readings")
+                
+                if ppg_batch:
+                    c.executemany(
+                        'INSERT INTO ppg (device_id, value, timestamp) VALUES (?, ?, ?)',
+                        ppg_batch
+                    )
+                    print(f"Inserted {len(ppg_batch)} PPG readings")
+                
+                health_data_count = len(skin_temp_batch) + len(gsr_batch) + len(light_batch) + len(ppg_batch)
+
+            # Process motion data (accelerometer, gyroscope)
+            if 'motion_data' in data and data['motion_data']:
+                # Group motion data by type for batch insertion
+                accelerometer_batch = []
+                gyroscope_batch = []
+                
+                for motion_reading in data['motion_data']:
+                    data_type = motion_reading.get('data_type')
+                    x_value = motion_reading.get('x_value')
+                    y_value = motion_reading.get('y_value')
+                    z_value = motion_reading.get('z_value')
+                    timestamp = motion_reading.get('timestamp')
+                    
+                    if data_type == 'accelerometer':
+                        accelerometer_batch.append((device_id, x_value, y_value, z_value, timestamp))
+                    elif data_type == 'gyroscope':
+                        gyroscope_batch.append((device_id, x_value, y_value, z_value, timestamp))
+                
+                # Insert batched motion data
+                if accelerometer_batch:
+                    c.executemany(
+                        'INSERT INTO accelerometer (device_id, x_value, y_value, z_value, timestamp) VALUES (?, ?, ?, ?, ?)',
+                        accelerometer_batch
+                    )
+                    print(f"Inserted {len(accelerometer_batch)} accelerometer readings")
+                
+                if gyroscope_batch:
+                    c.executemany(
+                        'INSERT INTO gyroscope (device_id, x_value, y_value, z_value, timestamp) VALUES (?, ?, ?, ?, ?)',
+                        gyroscope_batch
+                    )
+                    print(f"Inserted {len(gyroscope_batch)} gyroscope readings")
+                
+                motion_data_count = len(accelerometer_batch) + len(gyroscope_batch)
+
+            # Calculate processing time
+            processing_time_ms = int((time.time() - start_time) * 1000)
+            total_records = heart_rate_count + health_data_count + motion_data_count
+            
+            # Log batch processing info
+            c.execute('''
+                INSERT INTO batch_logs 
+                (device_id, batch_timestamp, heart_rate_count, health_data_count, motion_data_count, 
+                 total_records, processing_time_ms, created_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                device_id, batch_timestamp, heart_rate_count, health_data_count, 
+                motion_data_count, total_records, processing_time_ms, 
+                datetime.datetime.now().isoformat()
+            ))
+            
+            # Commit transaction
+            conn.commit()
+            
+            response_data = {
+                'message': 'Batch data processed successfully',
+                'summary': {
+                    'device_id': device_id,
+                    'total_records': total_records,
+                    'heart_rate_count': heart_rate_count,
+                    'health_data_count': health_data_count,
+                    'motion_data_count': motion_data_count,
+                    'processing_time_ms': processing_time_ms
+                }
+            }
+            
+            print(f"Batch processed: {total_records} total records in {processing_time_ms}ms")
+            return jsonify(response_data), 201
+            
+        except Exception as e:
+            # Rollback transaction on error
+            conn.rollback()
+            raise e
+            
+    except Exception as e:
+        print(f"Error processing batch: {str(e)}")
+        return jsonify({'error': f'Batch processing failed: {str(e)}'}), 500
+    
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
+# NEW: Get batch processing statistics
+@app.route('/api/batch/stats', methods=['GET'])
+def get_batch_stats():
+    try:
+        device_id = request.args.get('device_id', None)
+        limit = request.args.get('limit', 50)
+        
+        conn = sqlite3.connect('health_data.db')
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        
+        query = 'SELECT * FROM batch_logs'
+        params = []
+        
+        if device_id:
+            query += ' WHERE device_id = ?'
+            params.append(device_id)
+            
+        query += ' ORDER BY created_at DESC LIMIT ?'
+        params.append(limit)
+        
+        c.execute(query, params)
+        results = [dict(row) for row in c.fetchall()]
+        conn.close()
+        
+        return jsonify(results), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # Web interface routes
 @app.route('/')
 def home():
@@ -204,7 +443,7 @@ def get_devices():
     devices = get_device_ids()
     return jsonify(devices)
 
-# API routes for health data
+# EXISTING API routes for health data (kept for backward compatibility)
 @app.route('/api/heartrate', methods=['POST'])
 def store_heartrate():
     try:
@@ -597,4 +836,7 @@ def get_gyroscope():
 # Run the server
 if __name__ == '__main__':
     print("Starting Health Data Server...")
+    print("New endpoints added:")
+    print("  POST /api/batch - for batched sensor data")
+    print("  GET /api/batch/stats - for batch processing statistics")
     app.run(host='192.168.0.98', port=5000, debug=True)

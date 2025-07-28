@@ -1,5 +1,5 @@
 [versions]
-agp = "8.8.2"
+agp = "8.11.1"
 coreKtx = "1.15.0"
 healthServicesClient = "1.0.0-beta01"
 healthServicesClientVersion = "1.1.0-alpha05"
