@@ -1,3 +1,6 @@
+# app.py - Health Data Server with Batch Processing and Web Interface
+
+# Library imports
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import sqlite3
@@ -188,7 +191,6 @@ def init_db():
             ''')
             print("Created gyroscope table")
 
-        # Check for batch_logs table
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='batch_logs'")
         if not c.fetchone():
             c.execute('''
@@ -222,7 +224,7 @@ def get_device_ids():
     conn.close()
     return devices
 
-# NEW: Batch processing endpoint
+# Batch processing endpoint
 @app.route('/api/batch', methods=['POST'])
 def store_batch_data():
     try:
@@ -398,7 +400,7 @@ def store_batch_data():
         if 'conn' in locals():
             conn.close()
 
-# NEW: Get batch processing statistics
+# Get batch processing statistics
 @app.route('/api/batch/stats', methods=['GET'])
 def get_batch_stats():
     try:
@@ -428,7 +430,7 @@ def get_batch_stats():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Web interface routes
+# Web interface routes (those need to be updated, OLD UI)
 @app.route('/')
 def home():
     devices = get_device_ids()
@@ -836,7 +838,5 @@ def get_gyroscope():
 # Run the server
 if __name__ == '__main__':
     print("Starting Health Data Server...")
-    print("New endpoints added:")
-    print("  POST /api/batch - for batched sensor data")
     print("  GET /api/batch/stats - for batch processing statistics")
     app.run(host='192.168.0.98', port=5000, debug=True)
